@@ -1,21 +1,28 @@
+version: 2.1
+
 jobs:
-  deploy-to-k8s:
+  build-and-push:
     docker:
       - image: cimg/base:stable
     steps:
+      - checkout
+
+      - setup_remote_docker:
+          docker_layer_caching: true
+
       - run:
-          name: Deploy to Kubernetes
+          name: Build Docker Image
           command: |
-            cat \<<EOF | kubectl apply -f -
-            apiVersion: v1
-            kind: Pod
-            metadata:
-              name: age-calculator
-            spec:
-              containers:
-              - name: age-calculator
-                image: syedsohail746/age-calculator:1
-                ports:
-                - containerPort: 80
-            EOF
+            docker build -t syedsohail746/age-calculator:1 .
+
+      - run:
+          name: Push Docker Image to Docker Hub
+          command: |
+            echo "$DOCKERHUB_PASS" | docker login -u "$DOCKERHUB_USER" --password-stdin
+            docker push syedsohail746/age-calculator:1
+
+workflows:
+  build-deploy:
+    jobs:
+      - build-and-push
 
