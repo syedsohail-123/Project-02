@@ -1,0 +1,58 @@
+version: 2.1
+
+executors:
+  docker-executor:
+    docker:
+      - image: cimg/base:stable
+
+jobs:
+  build-and-push:
+    executor: docker-executor
+    steps:
+      - checkout
+
+      - setup_remote_docker:
+          docker_layer_caching: true
+
+      - run:
+          name: Build Docker Image
+          command: docker build -t syedsohail746/age-calculator:1 .
+
+      - run:
+          name: Push Docker Image to Docker Hub
+          command: |
+            echo "$DOCKERHUB_PASS" | docker login -u "$DOCKERHUB_USER" --password-stdin
+            docker push syedsohail746/age-calculator:1
+
+  deploy-to-k8s:
+    docker:
+      - image: bitnami/kubectl:latest
+    steps:
+      - checkout
+      - run:
+          name: Create Kubernetes Pod with NGINX + App Container
+          command: |
+            cat <<EOF | kubectl apply -f -
+            apiVersion: v1
+            kind: Pod
+            metadata:
+              name: age-calculator-pod
+            spec:
+              containers:
+                - name: app
+                  image: syedsohail746/age-calculator:1
+                  ports:
+                    - containerPort: 3000
+                - name: nginx
+                  image: nginx
+                  ports:
+                    - containerPort: 80
+            EOF
+
+workflows:
+  build-deploy:
+    jobs:
+      - build-and-push
+      - deploy-to-k8s:
+          requires:
+            - build-and-push
